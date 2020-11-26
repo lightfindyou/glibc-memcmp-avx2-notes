@@ -236,7 +236,7 @@ L(sameLess2):
 	ret		//note
 
 	.p2align 4
-L(1):
+L(le1):
 	movzbl	(%rdi), %eax	//这里为什么用的movzbl？l是32位，高位会不会有影响
 //	movzbl	(%rsi), %ecx
 //	subl	%ecx, %eax
@@ -253,7 +253,7 @@ L(zero):
 	.p2align 4
 L(less_vec):
 	cmpb	$1, %dl
-	je	L(1)	//长度为1
+	je	L(le1)	//长度为1
 	jb	L(zero)	//比较长度小于1就返回0
 	cmpb	$4, %dl
 	jb	L(between_2_3)
