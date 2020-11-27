@@ -10,6 +10,11 @@
 #include <time.h>
 #include <unistd.h>
 
+//#define memSize 33554432    //32M
+//536870912       //512M
+//1073741824      //1G
+#define memSize 4294967296      //4G
+
 static long get_nanos() {
     struct timespec ts;
     timespec_get(&ts, TIME_UTC);
@@ -24,9 +29,11 @@ extern int memcmp_avx2_asm(const void *s1, const void *s2, size_t n, void* first
 int main(void) {
     int status, pkey, counter = 0, pageSize, fd, filesize;
     char *dest, *src;
+    char *destTmp, *srcTmp;
     char* diffPos;
-	long timeBegin, timeEnd;
+	unsigned long long timeBegin, timeEnd;
     struct stat st;
+    unsigned long tail;
     int cpySize[9] = {3,13,50,100,512,1024,2048,4096,6144};
 //    int cpySize[1] = {8192};
     pageSize = getpagesize();
@@ -44,42 +51,38 @@ int main(void) {
 //    if (src == MAP_FAILED)
 //        errExit("mmap\n");
 
-    src = calloc(1, filesize);
+    src = calloc(1, memSize);
     if (src <0)
         errExit("malloc\n");
+    tail = (unsigned long)src + memSize - 6245;
 
-    dest = calloc(1, filesize);
+    dest = calloc(1,  memSize);
     if (dest <0)
         errExit("malloc\n");
-//    memcpy(dest,src,pageSize*6-1);
-//    memset(dest+890,256,8);
-//    *(dest+0) = 0;
-//    *(dest+3) = 1;
-//    *(dest+2) = 2;
-//    *(dest+3) = 3;
-//    *(dest+4) = 4;
-//    *(dest+5) = 5;
-//    *(dest+6) = 6;
-//    *(dest+7) = 7;
+
     for(int j=0;j<9;j++){
         int cmpSize = cpySize[j];
-        int cmpTime = 20<(cmpSize/10)?(cmpSize/10):20;
+//        int cmpTime = 20<(cmpSize/10)?(cmpSize/10):20;
         int r;
         counter = 0;
     	timeBegin = get_nanos();
-        srandom(timeBegin);
-    	for(int i=0;i<cmpTime;i++){
-    	    printf("counter: %d\n", counter);
-            r = abs(random())%(cmpSize-1);
-            int res = memcmp_avx2_asm(dest,src,r, &diffPos);
+        destTmp = dest;
+        srcTmp = src;
+//        srandom(timeBegin);
+//    	for(int i=0;i<cmpTime;i++){
+    	for(;(unsigned long)srcTmp<=tail;destTmp+=6245,srcTmp+=6245){
+//            r = abs(random())%(cmpSize-1);
+            int res = memcmp_avx2_asm(destTmp,srcTmp,cmpSize, &diffPos);
             if(res!=0){
                 printf("cmpSize:%d\n", r);
             }
     		counter++;
     	}
     	timeEnd = get_nanos();
-    	printf("memcmp time %ld, compare %d times, everage cmpare time %ld, comapre size %d\n",
-    			timeEnd-timeBegin, counter, (timeEnd-timeBegin)/counter, cmpSize);
+    	printf("memcmp time %lld, ", timeEnd-timeBegin);
+    	printf("compare %d times, ", counter);
+    	printf("everage cmpare time %lld, ", (timeEnd-timeBegin)/counter);
+    	printf("comapre size %d\n", cmpSize);
     }
 
 //    for(int j=0;j<9;j++){

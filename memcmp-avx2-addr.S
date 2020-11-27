@@ -262,7 +262,7 @@ L(less_vec):
 	cmpb	$16, %dl
 	jae	L(between_16_31)	//大于等于就是16-31位
 	/* It is between 8 and 15 bytes.  */
-	vmovq	(%rdi), %xmm1	//xmm是128bits，16byte
+	vmovq	(%rdi), %xmm1	//xmm是128bits，16byte,为什么用16byte呢
 	vmovq	(%rsi), %xmm2
 	VPCMPEQ %xmm1, %xmm2, %xmm2		//相等就都设为1,否则就都是0	
 	vpmovmskb %xmm2, %eax	//搜集每一byte的最高位组成掩码到%eax的低位
