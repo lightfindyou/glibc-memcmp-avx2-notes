@@ -34,7 +34,7 @@ int main(void) {
 	unsigned long long timeBegin, timeEnd;
     struct stat st;
     unsigned long tail;
-    int cpySize[9] = {3,13,50,100,512,1024,2048,4096,6144};
+    int cpySize[10] = {3,13,50,100,512,1024,2048,4096,4099,6144};
 //    int cpySize[1] = {8192};
     pageSize = getpagesize();
 
@@ -60,7 +60,7 @@ int main(void) {
     if (dest <0)
         errExit("malloc\n");
 
-    for(int j=0;j<9;j++){
+    for(int j=0;j<10;j++){
         int cmpSize = cpySize[j];
 //        int cmpTime = 20<(cmpSize/10)?(cmpSize/10):20;
         int r;
@@ -79,10 +79,10 @@ int main(void) {
     		counter++;
     	}
     	timeEnd = get_nanos();
-    	printf("memcmp time %lld, ", timeEnd-timeBegin);
-    	printf("compare %d times, ", counter);
-    	printf("everage cmpare time %lld, ", (timeEnd-timeBegin)/counter);
-    	printf("comapre size %d\n", cmpSize);
+    	printf("memcmp consume time %10lld, ", timeEnd-timeBegin);
+    	printf("compare %6d times, ", counter);
+    	printf("everage cmpare time %4lld, ", (timeEnd-timeBegin)/counter);
+    	printf("comapre size %5d\n", cmpSize);
     }
 
 //    for(int j=0;j<9;j++){
