@@ -172,26 +172,83 @@ L(between_4_7):
 	shlq	$32, %rax
 //	shlq	$32, %rcx
 	shlq	$32, %r8
-	movq	%rdi, %r9
-	movbe	-4(%rdi, %rdx), %edi	//把末尾-4的字节用大端法写到edi（rdi，第一个参数的低32位）
-	movbe	-4(%rsi, %rdx), %esi
-	orq	%rdi, %rax	//OR第一个参数的前4和后4个byte,哦，拼接，前4byte已经到高32位了,从高位到低位分别是原来的第0,1,2,3,tail-3,tail-2,tail-1,tail字节
+//	movq	%rdi, %r9
+//	movbe	-4(%rdi, %rdx), %edi	//把末尾-4的字节用大端法写到edi（rdi，第一个参数的低32位）
+	movbe	-4(%rdi, %rdx), %r10d	//把末尾-4的字节用大端法写到edi（rdi，第一个参数的低32位）
+	orq	%r10, %rax	//OR第一个参数的前4和后4个byte,哦，拼接，前4byte已经到高32位了,从高位到低位分别是原来的第0,1,2,3,tail-3,tail-2,tail-1,tail字节
+//	movbe	-4(%rsi, %rdx), %esi
+	movbe	-4(%rsi, %rdx), %r10d
 //	orq	%rsi, %rcx
 //	subq	%rcx, %rax
-	orq	%rsi, %r8
+	orq		%r10, %r8
 	subq	%r8, %rax
 	je	L(exit)
 //added by xzjin
+	movq	%rax, %r10
+	movw	(%rdi), %ax
+	movw	(%rsi), %r8w
+	movw	%ax, %r9w
+	subw	%r8w, %ax
+	jz		L(later3diff4_7)
+	subb	%r8b, %r9b
+	jnz 		L(_1diff4_7)
+	leaq	1(%rdi), %rdi	//start+len-1
+	movq	%rdi, (%rcx)
+	ret		//note
+L(_1diff4_7):
+	movq	%rdi, (%rcx)
+	ret		//note
+
+L(later3diff4_7):
+	movw	2(%rdi), %ax
+	movw	2(%rsi), %r8w
+	movw	%ax, %r9w
+	subw	%r8w, %ax
+	jz		L(later5diff4_7)
+	subb	%r8b, %r9b
+	jnz 		L(_3diff4_7)
+	leaq	3(%rdi), %rdi	//start+len-1
+	movq	%rdi, (%rcx)
+	ret
+L(_3diff4_7):
+	leaq	2(%rdi), %rdi
+	movq	%rdi, (%rcx)
+	ret		//note
+
+L(later5diff4_7):
+	movw	4(%rdi), %ax
+	movw	4(%rsi), %r8w
+	movw	%ax, %r9w
+	subw	%r8w, %ax
+	jz		L(later6diff4_7)
+	subb	%r8b, %r9b
+	jnz 		L(_5diff4_7)
+	leaq	5(%rdi), %rdi	//start+len-1
+	movq	%rdi, (%rcx)
+	ret
+L(_5diff4_7):
+	leaq	4(%rdi), %rdi
+	movq	%rdi, (%rcx)
+	ret		//note
+
+L(later6diff4_7):
+	movq	%r10, %rax
+	leaq	6(%rdi), %rdi
+	movq	%rdi, (%rcx)
+	ret		//note
+
+/*
 	lzcntq	%rax, %r8	//开始(leading)0的个数,by bits
 	shrq	$3, %r8
 	cmp	$4, %r8
-	jb	L(sameLess4)	/*相当于jl，b是below的意思，R8(相同长度)内容小于4的时候就跳转*/
+	jb	L(sameLess4)	//相当于jl，b是below的意思，R8(相同长度)内容小于4的时候就跳转
 	leaq	-8(%r9, %rdx), %rdx	//把(第一个参数的)第一个不同的地址移到第四个参数指向的内存,start+len-8
 	addq	%r8, %rdx	//把(第一个参数的)第一个不同的地址移到第四个参数指向的内存,start+len-8+idx
 	movq	%rdx, (%rcx)		//把(第一个参数的)第一个不同的地址移到第四个参数指向的内存
 	sbbl	%eax, %eax
 	orl	$1, %eax
 	ret		//note
+*/
 
 L(sameLess4):
 	leaq	(%r9, %r8), %rdx	//把(第一个参数的)第一个不同的地址移到第四个参数指向的内存
@@ -210,29 +267,53 @@ L(between_2_3):
 	movzwl	(%rdi), %eax	//把16位扩展成32位
 //	movzwl	(%rsi), %ecx
 	movzwl	(%rsi), %r8d
+	movl	%eax, %r9d	//把%eax复制到%r9d，先比较前两位
+	subl	%r8d, %r9d	//比较前两位
+	jnz		L(sameLess2)
+
+/*
 	shll	$8, %eax
 //	shll	$8, %ecx
 	shll	$8, %r8d
 	bswap	%eax			//交换大小端
 //	bswap	%ecx
 	bswap	%r8d
+*/
 	movb	-1(%rdi, %rdx), %al		//读最后一位到低8位
 //	movb	-1(%rsi, %rdx), %cl		//从前到后分别是0...第0,1,1/2位
 	movb	-1(%rsi, %rdx), %r8b		//从前到后分别是0...第0,1,1/2位
 	/* Subtraction is okay because the upper 8 bits are zero.  */
 //	subl	%ecx, %eax	//这个应该是%eax-%ecx存到%eax里面
-	subl	%r8d, %eax	//这个应该是%eax-%ecx存到%eax里面
+//可以直接减，因为前面两byte一定是相同的
+	subb	%r8b, %al	//这个应该是%eax-%ecx存到%eax里面
+/*
 	lzcntq	%rax, %r8	//开始(leading)0的个数,by bits
-	shrq	$3, %r8		
+	shrq	$3, %r8
 	cmp	$7, %r8
-	jb	L(sameLess2)	/*相当于jl，b是below的意思，R8(相同长度)内容小于7的时候就跳转*/
+	jb	L(sameLess2)	//相当于jl，b是below的意思，R8(相同长度)内容小于7的时候就跳转
+*/
 	leaq	-1(%rdx, %rdi), %rdi	//start+len-1
 	movq	%rdi, (%rcx)
 	ret		//note
 
+/*
 L(sameLess2):
 	leaq	-5(%r8, %rdi), %rdx		//start+idx-5
 	movq	%rdx, (%rcx)
+	ret		//note
+*/
+
+L(sameLess2):
+	subb	%r8b, %al	//这个应该是%eax-%ecx存到%eax里面
+	jnz		L(firstDiff2_3)
+	leaq	1(%rdi), %r8
+	movq	%r8, (%rcx)
+	movl	%r9d, %eax
+	ret
+
+L(firstDiff2_3):
+	movl	%r9d, %eax
+	movq	%rdi, (%rcx)
 	ret		//note
 
 	.p2align 4
@@ -242,7 +323,7 @@ L(le1):
 //	subl	%ecx, %eax
 	movzbl	(%rsi), %r8d
 	subl	%r8d, %eax
-	movq	%rdx, (%rcx)
+	movq	%rdi, (%rcx)
 	ret		//note
 
 	.p2align 4

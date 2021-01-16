@@ -10,15 +10,42 @@
 #include <time.h>
 #include <unistd.h>
 
+typedef char __u8;
+
+#define memSize 30      //1K
+//#define memSize 1024      //1K
 //#define memSize 33554432    //32M
 //536870912       //512M
 //1073741824      //1G
-#define memSize 4294967296      //4G
+//#define memSize 1073741824      //1G
+//#define memSize 4294967296      //4G
+#define TEST_NR 300
 //#define memSize 687194767360    //10G 
 static long get_nanos() {
     struct timespec ts;
     timespec_get(&ts, TIME_UTC);
     return (long)ts.tv_sec * 1000000000L + ts.tv_nsec;
+}
+
+void printMem(void* mem, int lineNr){
+		int i=0;
+		for(;i<lineNr;i++){
+			__u8* id = (__u8*)(mem+16*i);
+			printf("%02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x\n",
+				 *(__u8*)((unsigned long long)id+0), *(__u8*)((unsigned long long)id+1),
+				 *(__u8*)((unsigned long long)id+2), *(__u8*)((unsigned long long)id+3),
+				 *(__u8*)((unsigned long long)id+4), *(__u8*)((unsigned long long)id+5),
+				 *(__u8*)((unsigned long long)id+6), *(__u8*)((unsigned long long)id+7),
+				 *(__u8*)((unsigned long long)id+8), *(__u8*)((unsigned long long)id+9),
+				 *(__u8*)((unsigned long long)id+10), *(__u8*)((unsigned long long)id+11),
+				 *(__u8*)((unsigned long long)id+12), *(__u8*)((unsigned long long)id+13),
+				 *(__u8*)((unsigned long long)id+14), *(__u8*)((unsigned long long)id+15));
+		}
+}
+
+void printLine(void* mem, int charNum){
+    int lineNr = charNum/16+((charNum)%16)?1:0;
+    printMem(mem, lineNr);
 }
 
 extern int memcmp_avx2_asm(const void *s1, const void *s2, size_t n, void* firstDiffPos);	
@@ -27,48 +54,55 @@ extern int memcmp_avx2_asm(const void *s1, const void *s2, size_t n, void* first
                     } while (0)
 
 int main(void) {
-    int status, pkey, counter = 0, pageSize, fd, filesize;
-    char *dest, *src;
-    char *destTmp, *srcTmp;
-    char* diffPos;
+    char * const dest = malloc(memSize);;
+    char * const src = malloc(memSize);;
+    char *destCmp, *srcCmp;
+    char* diffAddr;
+    int cmpSize;
 	unsigned long long timeBegin, timeEnd;
-    struct stat st;
-    unsigned long tail;
-    int cpySize[26] = {3,13,50,100,512,1024};
-    for(int i=6;i<26;i++){
-        cpySize[i] = cpySize[i-1]+4096;
-    }
-    pageSize = getpagesize();
 
-    src = calloc(1, memSize);
-    if (src <0)
-        errExit("malloc\n");
-    tail = (unsigned long)src + memSize - 6245 - cpySize[25];
-
-    dest = calloc(1,  memSize);
-    if (dest <0)
+    if (src <0 || dest <0)
         errExit("malloc\n");
 
-    printf("time(ns)\n");
-    for(int j=0;j<26;j++){
-        int cmpSize = cpySize[j];
-        counter = 0;
-    	timeBegin = get_nanos();
-        destTmp = dest;
-        srcTmp = src;
-    	for(;(unsigned long)srcTmp<=tail;
-               destTmp = destTmp+cmpSize+4097,srcTmp=srcTmp+cmpSize+4097){
-            int res = memcmp_avx2_asm(destTmp,srcTmp,cmpSize, &diffPos);
-            if(res!=0){
-                printf("cmp different, cmpSize:%d\n", cmpSize);
+    memcpy(src, dest, memSize);
+
+    srandom(get_nanos());
+    for(int j=0;j<TEST_NR;j++){
+        do{
+            cmpSize = random()%memSize;
+        }while(cmpSize == 0);
+
+//        cmpSize = 7;
+        int cmpOffset = random()%(memSize-cmpSize);
+        int diffPos = random()%cmpSize;
+
+        char *diffp = dest+cmpOffset+diffPos;
+        char newCon;
+        do{
+            newCon = random()%100;
+        }while(newCon==*diffp);
+        *diffp = newCon;
+
+        printf("dest Mem:\n");
+        printLine(dest+cmpOffset, cmpSize);
+        printf("src Mem:\n");
+        printLine(src+cmpOffset, cmpSize);
+        int res = memcmp_avx2_asm(dest+cmpOffset, src+cmpOffset, cmpSize, &diffAddr);
+        if(res!=0){
+            if(diffAddr != diffp){
+                printf("diffAddr:%p, cmpSrc:%p, destSrc: %p, cmpLen:%d, correct diffAddr:%p\n",
+                    diffAddr, src+cmpOffset, dest+cmpOffset, cmpSize, diffp);
+                printf("diffOffset:%ld, correct diff Offset:%d\n",
+                    diffAddr-(dest+cmpOffset), diffPos);
+                printf("Wrong\n");
+                return -1;
             }
-    		counter++;
-    	}
-    	timeEnd = get_nanos();
-    	printf("\tmemcmp consume time %10lld, ", timeEnd-timeBegin);
-    	printf("compare %10d times, ", counter);
-    	printf("everage cmpare time %6lld, ", (timeEnd-timeBegin)/counter);
-    	printf("comapre size %7d\n", cmpSize);
+            printf("%4d. Pass\n", j);
+        }else{
+            printf("Wrong, content same.\n");
+            return -1;
+        }
+        memcpy(src, dest, memSize);
     }
 
     return 0;
